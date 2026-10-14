@@ -218,3 +218,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project Tyto
+data/raw/
+data/interim/
+data/processed/
+data/gold/to_annotate.parquet
+models/
+artifacts/
+exports/
+mlruns/
+mlflow.db
+.idea/
