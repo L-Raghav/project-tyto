@@ -1,0 +1,19 @@
+# Enforce UTF-8 and LF line endings across the repository
+* text=auto eol=lf
+
+*.py text eol=lf diff=python
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.srt text eol=lf
+*.csv text eol=lf
+
+# Binary file types
+*.parquet binary
+*.whl binary
+*.pt binary
+*.bin binary
+*.safetensors binary
