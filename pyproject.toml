@@ -31,6 +31,10 @@ dependencies = [
     "faiss-cpu==1.15.1",
     "srt==3.5.3",
     "mlflow==3.17.1",
+    "opustools>=1.6.6",
+    "datasketch>=1.6.5",
+    "requests>=2.32.0",
+    "matplotlib>=3.9",
 ]
 
 [project.optional-dependencies]
