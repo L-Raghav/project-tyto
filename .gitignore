@@ -220,12 +220,21 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Project Tyto
-data/raw/
-data/interim/
-data/processed/
-data/gold/to_annotate.parquet
-models/
-artifacts/
+data/raw/*
+!data/raw/.gitkeep
+data/interim/*
+!data/interim/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/gold/*
+!data/gold/annotations.parquet
+!data/gold/.gitkeep
+!data/resources/
+!data/resources/**
+models/*
+!models/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
 exports/
 mlruns/
 mlflow.db
