@@ -1,10 +1,19 @@
 """Unit tests for Typer CLI commands and help output."""
 
+import re
+
 from typer.testing import CliRunner
 
 from tyto.cli import app
 
 runner = CliRunner()
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _plain(text: str) -> str:
+    """Strip ANSI styling so assertions don't depend on terminal colour support."""
+    return _ANSI_RE.sub("", text)
 
 
 def test_cli_help() -> None:
@@ -34,7 +43,7 @@ def test_cli_doctor_help() -> None:
     """Ensure doctor command help lists expected flags."""
     result = runner.invoke(app, ["doctor", "--help"])
     assert result.exit_code == 0
-    assert "--cpu-ok" in result.output
+    assert "--cpu-ok" in _plain(result.output)
 
 
 def test_cli_doctor_fake_smoke() -> None:
