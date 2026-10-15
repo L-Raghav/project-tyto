@@ -1,0 +1,50 @@
+# Project Tyto: Default Configuration
+# All stages read and write Parquet; expensive outputs are cached.
+
+seed: 42
+
+paths:
+  data_dir: "data"
+  raw_dir: "data/raw"
+  interim_dir: "data/interim"
+  processed_dir: "data/processed"
+  gold_dir: "data/gold"
+  resources_dir: "data/resources"
+  artifacts_dir: "artifacts"
+  models_dir: "models"
+  reports_dir: "reports"
+
+device:
+  use_cuda: true
+  fp16: true
+  batch_size: 32
+  backoff_factor: 2
+  num_workers: 0
+
+models:
+  labse:
+    name: "sentence-transformers/LaBSE"
+    max_seq_length: 128
+    device: "cuda"
+
+taxonomy:
+  labels:
+    - "OK"
+    - "LOCALISED_OK"
+    - "IDIOM_LITERAL"
+    - "TONE_SOFTENED"
+    - "TONE_INTENSIFIED"
+    - "OMISSION"
+    - "ADDITION"
+    - "MISTRANSLATION"
+    - "REGISTER_MISMATCH"
+    - "MISALIGNED"
+  severities: [0, 1, 2]
+  issue_labels:
+    - "IDIOM_LITERAL"
+    - "TONE_SOFTENED"
+    - "TONE_INTENSIFIED"
+    - "OMISSION"
+    - "ADDITION"
+    - "MISTRANSLATION"
+    - "REGISTER_MISMATCH"

@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tyto"
+version = "0.1.0"
+description = "Mines and predicts translation-quality problems in English-Tamil subtitles."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+authors = [
+    { name = "Project Tyto" }
+]
+dependencies = [
+    "pydantic==2.14.1",
+    "pyyaml==6.0.3",
+    "typer==0.27.3",
+    "rich==15.0.0",
+    "psutil==7.2.2",
+    "pandas==3.0.6",
+    "pyarrow==25.0.1",
+    "duckdb==1.5.6",
+    "transformers==5.19.0",
+    "sentence-transformers==6.1.0",
+    "scikit-learn==1.9.1",
+    "lightgbm==4.7.0",
+    "mlxtend==0.25.0",
+    "hdbscan==0.8.44",
+    "umap-learn==0.5.12",
+    "shap==0.51.0",
+    "faiss-cpu==1.15.1",
+    "srt==3.5.3",
+    "mlflow==3.17.1",
+]
+
+[project.optional-dependencies]
+gpu = [
+    "accelerate>=1.0.0",
+]
+app = [
+    "streamlit==1.66.0",
+    "plotly==7.1.0",
+]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.17.0",
+    "pre-commit==4.7.0",
+]
+
+[project.scripts]
+tyto = "tyto.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+ignore = []
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra -q"
