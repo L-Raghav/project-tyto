@@ -76,10 +76,20 @@ def data_download(
     ] = False,
     version: Annotated[
         str | None,
-        typer.Option("--version", help="Override OPUS release version (e.g. 2016)."),
+        typer.Option(
+            "--version",
+            help="OPUS release name ('latest' or exact, e.g. 'v2024').",
+        ),
+    ] = None,
+    max_docs: Annotated[
+        int | None,
+        typer.Option(
+            "--max-docs",
+            help="Limit number of documents extracted from en.zip (smoke test).",
+        ),
     ] = None,
 ) -> None:
-    """Download OPUS OpenSubtitles en-ta corpus (resume-safe)."""
+    """Download OPUS OpenSubtitles en-ta corpus (v2024 layout, resume-safe)."""
     os.environ.setdefault("PYTHONUTF8", "1")
     from tyto.data.download import download_opus
     from tyto.utils.config import load_config
@@ -88,9 +98,13 @@ def data_download(
     if version:
         cfg.opus.version = version
 
-    console.print(f"[bold]Downloading OPUS {cfg.opus.corpus} v{cfg.opus.version} "
-                  f"{cfg.opus.src_lang}-{cfg.opus.tgt_lang} ...[/bold]")
-    paths = download_opus(cfg, force=force)
+    console.print(
+        f"[bold]Downloading OPUS {cfg.opus.corpus} {cfg.opus.version} "
+        f"{cfg.opus.src_lang}-{cfg.opus.tgt_lang}"
+        + (f" (max-docs={max_docs})" if max_docs else "")
+        + " ...[/bold]"
+    )
+    paths = download_opus(cfg, force=force, max_docs=max_docs)
     for label, path in paths.items():
         console.print(f"  [green]✓[/green] {label}: {path}")
 
@@ -101,39 +115,115 @@ def data_parse(
         str,
         typer.Option("--config", "-c", help="Path to config YAML."),
     ] = "configs/default.yaml",
-    zip_path: Annotated[
+    source: Annotated[
         str | None,
-        typer.Option("--zip", help="Override path to the OPUS XML zip."),
+        typer.Option(
+            "--source",
+            help=(
+                "v2024 cache directory (default: data/raw/opus/<version>) "
+                "or a legacy en-ta.zip path for pre-v2024 releases."
+            ),
+        ),
     ] = None,
     output: Annotated[
         str | None,
         typer.Option("--output", "-o", help="Override output parquet path."),
     ] = None,
+    max_docs: Annotated[
+        int | None,
+        typer.Option("--max-docs", help="Stop after N documents (v2024 only)."),
+    ] = None,
     max_pairs: Annotated[
         int | None,
-        typer.Option("--max-pairs", help="Stop after N pairs (smoke test)."),
+        typer.Option("--max-pairs", help="Stop after N alignment pairs."),
     ] = None,
 ) -> None:
-    """Parse OPUS XML zip into data/processed/pairs.parquet."""
+    """Parse OPUS v2024 cache into data/processed/pairs.parquet."""
     os.environ.setdefault("PYTHONUTF8", "1")
     from tyto.data.parse import parse_and_save
     from tyto.utils.config import load_config
 
     cfg = load_config(config)
-
     opus = cfg.opus
-    if zip_path is None:
-        pair = f"{opus.src_lang}-{opus.tgt_lang}"
-        auto = Path(opus.download_dir) / f"{pair}.zip"
-        if not auto.exists():
-            console.print(f"[red]ZIP not found at {auto}. Run 'data download' first.[/red]")
+
+    if source is None:
+        # Default: v2024 cache root created by 'data download'.
+        from tyto.data.download import resolve_version
+        version = resolve_version(
+            opus.corpus, opus.version, opus.src_lang, opus.tgt_lang
+        ) if opus.version.lower() == "latest" else opus.version
+        source_path = Path(opus.download_dir) / version
+        if not source_path.exists():
+            console.print(
+                f"[red]Cache directory not found: {source_path}. "
+                "Run 'data download' first.[/red]"
+            )
             raise typer.Exit(1)
-        zip_path = str(auto)
+    else:
+        source_path = Path(source)
+        if not source_path.exists():
+            console.print(f"[red]Source not found: {source_path}[/red]")
+            raise typer.Exit(1)
 
     out = Path(output) if output else None
-    console.print(f"[bold]Parsing {zip_path} ...[/bold]")
-    result = parse_and_save(cfg, Path(zip_path), output_path=out, max_pairs=max_pairs)
+    console.print(f"[bold]Parsing {source_path} ...[/bold]")
+    result = parse_and_save(
+        cfg, source_path, output_path=out, max_docs=max_docs, max_pairs=max_pairs
+    )
     console.print(f"[green]✓[/green] pairs.parquet written to {result}")
+
+
+@data_app.command(name="list")
+def data_list(
+    config: Annotated[
+        str,
+        typer.Option("--config", "-c", help="Path to config YAML."),
+    ] = "configs/default.yaml",
+    all_versions: Annotated[
+        bool,
+        typer.Option("--all", help="Show all versions instead of just 'latest'."),
+    ] = False,
+) -> None:
+    """List available OPUS releases and file URLs for the configured language pair."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    from tyto.data.download import build_opus_urls, list_corpus_files
+    from tyto.utils.config import load_config
+
+    cfg = load_config(config)
+    opus = cfg.opus
+    version_filter = "all" if all_versions else "latest"
+
+    console.print(
+        f"[bold]OPUS {opus.corpus} releases for {opus.src_lang}-{opus.tgt_lang} "
+        f"(filter: {version_filter})[/bold]"
+    )
+    entries = list_corpus_files(
+        opus.corpus, opus.src_lang, opus.tgt_lang, version=version_filter
+    )
+    if not entries:
+        console.print("[yellow]No releases found (network error or no match).[/yellow]")
+        return
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Version")
+    table.add_column("Preprocessing")
+    table.add_column("Size (MB)", justify="right")
+    table.add_column("URL")
+    for entry in entries:
+        size_mb = f"{entry.get('size', 0) / 1e6:.1f}" if entry.get("size") else "?"
+        table.add_row(
+            str(entry.get("version", "?")),
+            str(entry.get("preprocessing", "?")),
+            size_mb,
+            str(entry.get("url", "")),
+        )
+    console.print(table)
+
+    # Always show the three canonical v2024 URLs for the configured version.
+    console.print("\n[bold]Canonical download URLs:[/bold]")
+    urls = build_opus_urls(opus.corpus, opus.version, opus.src_lang, opus.tgt_lang)
+    for label, url in urls.items():
+        console.print(f"  {label:12s}: {url}")
 
 
 @data_app.command(name="qc")
