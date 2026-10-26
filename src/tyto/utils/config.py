@@ -87,6 +87,39 @@ class TaxonomyConfig(BaseModel):
     )
 
 
+class OpusConfig(BaseModel):
+    """OPUS corpus download settings."""
+
+    corpus: str = "OpenSubtitles"
+    src_lang: str = "en"
+    tgt_lang: str = "ta"
+    version: str = "2016"
+    download_dir: str = "data/raw/opus"
+
+
+class QcConfig(BaseModel):
+    """Quality-control thresholds for Phase 1 cleaning and filtering."""
+
+    # Token length bounds.
+    min_en_tokens: int = 1
+    max_en_tokens: int = 100
+    min_ta_tokens: int = 1
+    max_ta_tokens: int = 100
+    # Character-level length ratio: max/min of (len_en, len_ta).
+    max_length_ratio: float = 10.0
+    # Script-based language ID thresholds (Tamil Unicode block ratio).
+    tamil_ratio_min: float = 0.4
+    tamil_ratio_code_mix: float = 0.8
+    ascii_ratio_romanised: float = 0.7
+    # LaBSE alignment score (stage-2 flag, not filtering).
+    labse_min_score: float = 0.2
+    # MinHash near-dedup parameters.
+    minhash_num_perm: int = 128
+    minhash_threshold: float = 0.85
+    # Stop-gate.
+    min_usable_pairs: int = 20000
+
+
 class TytoConfig(BaseModel):
     """Root configuration for Project Tyto."""
 
@@ -95,6 +128,8 @@ class TytoConfig(BaseModel):
     device: DeviceConfig = Field(default_factory=DeviceConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     taxonomy: TaxonomyConfig = Field(default_factory=TaxonomyConfig)
+    opus: OpusConfig = Field(default_factory=OpusConfig)
+    qc: QcConfig = Field(default_factory=QcConfig)
 
 
 def load_config(path: str | Path = "configs/default.yaml") -> TytoConfig:

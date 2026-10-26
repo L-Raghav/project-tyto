@@ -1,5 +1,6 @@
 # Project Tyto: Default Configuration
 # All stages read and write Parquet; expensive outputs are cached.
+# PYTHONUTF8=1 must be set in the shell for Tamil text to survive every read/write.
 
 seed: 42
 
@@ -48,3 +49,36 @@ taxonomy:
     - "ADDITION"
     - "MISTRANSLATION"
     - "REGISTER_MISMATCH"
+
+# ─── Phase 1: Data ingestion ──────────────────────────────────────────────────
+opus:
+  corpus: "OpenSubtitles"
+  src_lang: "en"
+  tgt_lang: "ta"
+  # Latest available version for en-ta on OPUS (configurable).
+  version: "2016"
+  # Download root directory (relative to project root).
+  download_dir: "data/raw/opus"
+
+# ─── Phase 1: QC thresholds ───────────────────────────────────────────────────
+qc:
+  # Minimum / maximum English token count.
+  min_en_tokens: 1
+  max_en_tokens: 100
+  # Minimum / maximum Tamil token count (whitespace-split approximation).
+  min_ta_tokens: 1
+  max_ta_tokens: 100
+  # Max ratio max(len_en, len_ta) / min(len_en, len_ta) of character lengths.
+  max_length_ratio: 10.0
+  # Tamil Unicode block ratio thresholds.
+  tamil_ratio_min: 0.4        # below -> romanised or wrong-language
+  tamil_ratio_code_mix: 0.8   # between min and this -> code-mixed
+  # ASCII ratio threshold (if > this and tamil_ratio < min -> romanised Tamil).
+  ascii_ratio_romanised: 0.7
+  # Minimum LaBSE cosine similarity to keep as aligned (stage-2 flag only).
+  labse_min_score: 0.2
+  # Near-dedup: MinHash parameters.
+  minhash_num_perm: 128
+  minhash_threshold: 0.85     # Jaccard similarity threshold for near-dups.
+  # Stop-gate: fewer than this many usable pairs -> halt and report.
+  min_usable_pairs: 20000

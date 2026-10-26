@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import os
 import platform
 import shutil
 import sys
 import time
+from pathlib import Path
 from typing import Annotated
 
 import psutil
@@ -59,7 +61,201 @@ export_app = typer.Typer(
 def data_group(ctx: typer.Context) -> None:
     """Data processing command group."""
     if ctx.invoked_subcommand is None:
-        typer.echo("not implemented yet")
+        console.print("Use 'python -m tyto data --help' for sub-commands.")
+
+
+@data_app.command(name="download")
+def data_download(
+    config: Annotated[
+        str,
+        typer.Option("--config", "-c", help="Path to config YAML."),
+    ] = "configs/default.yaml",
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Re-download even if local files exist."),
+    ] = False,
+    version: Annotated[
+        str | None,
+        typer.Option("--version", help="Override OPUS release version (e.g. 2016)."),
+    ] = None,
+) -> None:
+    """Download OPUS OpenSubtitles en-ta corpus (resume-safe)."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    from tyto.data.download import download_opus
+    from tyto.utils.config import load_config
+
+    cfg = load_config(config)
+    if version:
+        cfg.opus.version = version
+
+    console.print(f"[bold]Downloading OPUS {cfg.opus.corpus} v{cfg.opus.version} "
+                  f"{cfg.opus.src_lang}-{cfg.opus.tgt_lang} ...[/bold]")
+    paths = download_opus(cfg, force=force)
+    for label, path in paths.items():
+        console.print(f"  [green]✓[/green] {label}: {path}")
+
+
+@data_app.command(name="parse")
+def data_parse(
+    config: Annotated[
+        str,
+        typer.Option("--config", "-c", help="Path to config YAML."),
+    ] = "configs/default.yaml",
+    zip_path: Annotated[
+        str | None,
+        typer.Option("--zip", help="Override path to the OPUS XML zip."),
+    ] = None,
+    output: Annotated[
+        str | None,
+        typer.Option("--output", "-o", help="Override output parquet path."),
+    ] = None,
+    max_pairs: Annotated[
+        int | None,
+        typer.Option("--max-pairs", help="Stop after N pairs (smoke test)."),
+    ] = None,
+) -> None:
+    """Parse OPUS XML zip into data/processed/pairs.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    from tyto.data.parse import parse_and_save
+    from tyto.utils.config import load_config
+
+    cfg = load_config(config)
+
+    opus = cfg.opus
+    if zip_path is None:
+        pair = f"{opus.src_lang}-{opus.tgt_lang}"
+        auto = Path(opus.download_dir) / f"{pair}.zip"
+        if not auto.exists():
+            console.print(f"[red]ZIP not found at {auto}. Run 'data download' first.[/red]")
+            raise typer.Exit(1)
+        zip_path = str(auto)
+
+    out = Path(output) if output else None
+    console.print(f"[bold]Parsing {zip_path} ...[/bold]")
+    result = parse_and_save(cfg, Path(zip_path), output_path=out, max_pairs=max_pairs)
+    console.print(f"[green]✓[/green] pairs.parquet written to {result}")
+
+
+@data_app.command(name="qc")
+def data_qc(
+    config: Annotated[
+        str,
+        typer.Option("--config", "-c", help="Path to config YAML."),
+    ] = "configs/default.yaml",
+    parquet: Annotated[
+        str | None,
+        typer.Option("--parquet", help="Override pairs.parquet path."),
+    ] = None,
+    labse: Annotated[
+        bool,
+        typer.Option("--labse", help="Run LaBSE alignment score (stage 2)."),
+    ] = False,
+) -> None:
+    """Apply QC filters and update qc_flags in pairs.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from tyto.data.parse import PAIRS_SCHEMA
+    from tyto.data.qc import run_qc_pipeline
+    from tyto.utils.config import load_config
+
+    cfg = load_config(config)
+    pq_path = Path(parquet) if parquet else (Path(cfg.paths.processed_dir) / "pairs.parquet")
+    if not pq_path.exists():
+        console.print(f"[red]pairs.parquet not found at {pq_path}[/red]")
+        raise typer.Exit(1)
+
+    import pandas as pd
+    df = pd.read_parquet(pq_path)
+    console.print(f"[bold]Running QC pipeline on {len(df):,} rows (labse={labse}) ...[/bold]")
+
+    try:
+        df = run_qc_pipeline(df, cfg, run_labse=labse)
+    except RuntimeError as e:
+        console.print(f"[bold red]{e}[/bold red]")
+        raise typer.Exit(1) from e
+
+    # Write updated parquet (add repeat_count and labse_score columns if needed).
+    extra_cols = [c for c in ["repeat_count", "labse_score"] if c in df.columns]
+    schema_fields = list(PAIRS_SCHEMA)
+    for col in extra_cols:
+        if col == "repeat_count":
+            schema_fields.append(pa.field(col, pa.int32()))
+        elif col == "labse_score":
+            schema_fields.append(pa.field(col, pa.float32()))
+    schema = pa.schema(schema_fields)
+
+    table = pa.Table.from_pandas(df, schema=schema, safe=False)
+    pq.write_table(table, pq_path, compression="snappy")
+    console.print(f"[green]✓[/green] QC complete. pairs.parquet updated at {pq_path}")
+
+
+@data_app.command(name="srt-align")
+def data_srt_align(
+    en_srt: Annotated[str, typer.Argument(help="Path to English .srt file.")],
+    ta_srt: Annotated[str, typer.Argument(help="Path to Tamil .srt file.")],
+    output: Annotated[
+        str | None,
+        typer.Option("--output", "-o", help="Output parquet path."),
+    ] = None,
+    film_id: Annotated[
+        str,
+        typer.Option("--film-id", help="Film identifier."),
+    ] = "unknown",
+    film_title: Annotated[
+        str,
+        typer.Option("--title", help="Human-readable film title."),
+    ] = "",
+    year: Annotated[
+        int | None,
+        typer.Option("--year", help="Release year."),
+    ] = None,
+    min_iou: Annotated[
+        float,
+        typer.Option("--min-iou", help="Minimum temporal IoU threshold."),
+    ] = 0.1,
+) -> None:
+    """Align two .srt files by temporal overlap (IoU) and write pairs.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    from tyto.data.srt_align import align_srt_pair_to_parquet
+
+    out = output or str(Path(en_srt).with_suffix(".aligned.parquet"))
+    console.print(f"[bold]Aligning {en_srt} + {ta_srt} ...[/bold]")
+    result = align_srt_pair_to_parquet(
+        en_srt, ta_srt, out,
+        film_id=film_id, film_title=film_title, year=year, min_iou=min_iou,
+    )
+    console.print(f"[green]✓[/green] Aligned parquet written to {result}")
+
+
+@data_app.command(name="audit")
+def data_audit(
+    config: Annotated[
+        str,
+        typer.Option("--config", "-c", help="Path to config YAML."),
+    ] = "configs/default.yaml",
+    parquet: Annotated[
+        str | None,
+        typer.Option("--parquet", help="Override pairs.parquet path."),
+    ] = None,
+    report: Annotated[
+        str | None,
+        typer.Option("--report", help="Override report output path."),
+    ] = None,
+) -> None:
+    """Generate data_audit.md and figures from pairs.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    from tyto.data.audit import generate_audit
+    from tyto.utils.config import load_config
+
+    cfg = load_config(config)
+    pq_path = Path(parquet) if parquet else None
+    rp_path = Path(report) if report else None
+
+    console.print("[bold]Generating data audit ...[/bold]")
+    result = generate_audit(cfg, parquet_path=pq_path, report_path=rp_path, seed=cfg.seed)
+    console.print(f"[green]✓[/green] Audit report written to {result}")
 
 
 @features_app.callback(invoke_without_command=True)
