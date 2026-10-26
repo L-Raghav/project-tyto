@@ -13,10 +13,7 @@ Tests cover TEXT RULES (PROJECT_BRIEF.md):
 
 from __future__ import annotations
 
-import pytest
-
 from tyto.data.clean import clean_text, compute_script_flags, script_ratios
-
 
 # ─── clean_text fixtures ──────────────────────────────────────────────────────
 

@@ -17,7 +17,6 @@ import pytest
 
 from tyto.data.parse import PAIRS_SCHEMA
 
-
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 EN_SRT_CONTENT = textwrap.dedent("""\

@@ -160,7 +160,7 @@ class TestParseOpusZip:
 
         cfg = TytoConfig()
         out = tmp_path / "pairs.parquet"
-        result = parse_and_save(cfg, mini_zip, output_path=out)
+        parse_and_save(cfg, mini_zip, output_path=out)
         assert out.exists()
         df = pd.read_parquet(out)
         assert len(df) == 2
