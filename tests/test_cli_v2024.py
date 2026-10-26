@@ -16,7 +16,6 @@ import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 from typer.testing import CliRunner
 
 from tyto.cli import app
@@ -249,6 +248,8 @@ def test_download_max_docs_end_to_end(tmp_path: Path) -> None:
 
     def fake_get(url, **kwargs):
         resp = MagicMock()
+        resp.__enter__.return_value = resp
+        resp.__exit__.return_value = False
         resp.raise_for_status = MagicMock()
         headers = kwargs.get("headers", {})
         if "Range" in headers and headers["Range"] == "bytes=0-0":
@@ -273,6 +274,13 @@ def test_download_max_docs_end_to_end(tmp_path: Path) -> None:
     remote_zip_ctx.namelist.return_value = [f"en/{ta_fname}"]
     remote_zip_ctx.read.return_value = _gz("<corpus/>")
 
+    from tyto.data.download import extract_tgt_docs as real_extract_tgt_docs
+
+    def check_extract(tgt_zip_path, *args, **kwargs):
+        assert tgt_zip_path.exists()
+        assert tgt_zip_path.stat().st_size == len(ta_zip_bytes)
+        return real_extract_tgt_docs(tgt_zip_path, *args, **kwargs)
+
     # Point download_dir at our tmp tree via a minimal config override.
     opus_dir = str(tmp_path / "data" / "raw" / "opus").replace("\\", "/")
     cfg_path = tmp_path / "test_dl.yaml"
@@ -285,6 +293,7 @@ def test_download_max_docs_end_to_end(tmp_path: Path) -> None:
         patch("requests.get", side_effect=fake_get),
         patch("requests.head", side_effect=fake_head),
         patch("remotezip.RemoteZip", return_value=remote_zip_ctx),
+        patch("tyto.data.download.extract_tgt_docs", side_effect=check_extract),
     ):
         result = runner.invoke(
             app,
@@ -299,6 +308,9 @@ def test_download_max_docs_end_to_end(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     assert "alignment" in result.output or "en_docs" in result.output
+    ta_zip_dest = cache_root / "ta.zip"
+    assert ta_zip_dest.exists()
+    assert ta_zip_dest.stat().st_size == len(ta_zip_bytes)
 
 
 # ─── data parse (v2024 fixture) ───────────────────────────────────────────────
