@@ -93,7 +93,7 @@ class OpusConfig(BaseModel):
     corpus: str = "OpenSubtitles"
     src_lang: str = "en"
     tgt_lang: str = "ta"
-    version: str = "2016"
+    version: str = "v2024"
     download_dir: str = "data/raw/opus"
 
 

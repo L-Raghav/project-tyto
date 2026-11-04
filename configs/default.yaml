@@ -56,7 +56,7 @@ opus:
   src_lang: "en"
   tgt_lang: "ta"
   # Latest available version for en-ta on OPUS (configurable).
-  version: "2016"
+  version: "v2024"
   # Download root directory (relative to project root).
   download_dir: "data/raw/opus"
 
