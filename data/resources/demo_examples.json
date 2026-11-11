@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "type": "idiom",
+    "text": "Stop beating around the bush and tell me what really happened.",
+    "label": "ILLUSTRATIVE inputs — not from real subtitle data"
+  },
+  {
+    "id": 2,
+    "type": "idiom",
+    "text": "He kicked the bucket before he could spill the beans.",
+    "label": "ILLUSTRATIVE inputs — not from real subtitle data"
+  },
+  {
+    "id": 3,
+    "type": "anger_intense",
+    "text": "I hate you and I swear I will never forgive this betrayal!",
+    "label": "ILLUSTRATIVE inputs — not from real subtitle data"
+  },
+  {
+    "id": 4,
+    "type": "anger_intense",
+    "text": "Please help me, I am so angry and scared they might kill him!",
+    "label": "ILLUSTRATIVE inputs — not from real subtitle data"
+  },
+  {
+    "id": 5,
+    "type": "neutral",
+    "text": "We will meet at the train station tomorrow morning.",
+    "label": "ILLUSTRATIVE inputs — not from real subtitle data"
+  },
+  {
+    "id": 6,
+    "type": "neutral",
+    "text": "She opened the window and looked out at the garden.",
+    "label": "ILLUSTRATIVE inputs — not from real subtitle data"
+  },
+  {
+    "id": 7,
+    "type": "question",
+    "text": "Why didn't you tell the inspector where you hid the keys?",
+    "label": "ILLUSTRATIVE inputs — not from real subtitle data"
+  },
+  {
+    "id": 8,
+    "type": "numbers_digits",
+    "text": "Flight 407 leaves Gate 12 at 08:30 with 145 passengers on board.",
+    "label": "ILLUSTRATIVE inputs — not from real subtitle data"
+  },
+  {
+    "id": 9,
+    "type": "place_name",
+    "text": "Yesterday Marcus traveled from Chennai to London via Dubai.",
+    "label": "ILLUSTRATIVE inputs — not from real subtitle data"
+  },
+  {
+    "id": 10,
+    "type": "long",
+    "text": "Even though everyone warned us that the mountain road would be dangerous after midnight, we decided to drive through the storm anyway because there was no other way home.",
+    "label": "ILLUSTRATIVE inputs — not from real subtitle data"
+  },
+  {
+    "id": 11,
+    "type": "short",
+    "text": "Wait here.",
+    "label": "ILLUSTRATIVE inputs — not from real subtitle data"
+  },
+  {
+    "id": 12,
+    "type": "exclamation",
+    "text": "GET OUT OF HERE RIGHT NOW!",
+    "label": "ILLUSTRATIVE inputs — not from real subtitle data"
+  }
+]
