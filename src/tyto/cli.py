@@ -418,17 +418,21 @@ def mvp_group(ctx: typer.Context) -> None:
 def mvp_load(
     zip_path: Annotated[
         str,
-        typer.Option("--zip", help="Path to en-ta.txt.zip"),
+        typer.Option("--input", "--zip", help="Path to en-ta.txt.zip"),
     ] = _DEFAULT_ZIP,
     out_path: Annotated[
         str,
-        typer.Option("--out", help="Output parquet path"),
+        typer.Option("--out", "--output", help="Output parquet path"),
     ] = _DEFAULT_PAIRS,
 ) -> None:
     """Load v2018 corpus → data/processed/pairs_v2018.parquet."""
     os.environ.setdefault("PYTHONUTF8", "1")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    if not Path(zip_path).exists():
+        console.print(f"[red]Error: input zip not found: {zip_path}[/red]")
+        raise typer.Exit(code=1)
     from tyto.mvp.load import load_v2018
+
     load_v2018(zip_path, out_path)
 
 
@@ -436,11 +440,11 @@ def mvp_load(
 def mvp_features(
     pairs_path: Annotated[
         str,
-        typer.Option("--pairs", help="Input pairs parquet"),
+        typer.Option("--pairs", "--input", help="Input pairs parquet"),
     ] = _DEFAULT_PAIRS,
     out_path: Annotated[
         str,
-        typer.Option("--out", help="Output features parquet"),
+        typer.Option("--out", "--output", help="Output features parquet"),
     ] = _DEFAULT_FEATURES,
     artifacts_dir: Annotated[
         str,
@@ -450,7 +454,11 @@ def mvp_features(
     """Extract features → artifacts/features.parquet."""
     os.environ.setdefault("PYTHONUTF8", "1")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    if not Path(pairs_path).exists():
+        console.print(f"[red]Error: pairs parquet not found: {pairs_path}[/red]")
+        raise typer.Exit(code=1)
     from tyto.mvp.features import extract_features
+
     extract_features(pairs_path, out_path, artifacts_dir)
 
 
@@ -510,6 +518,10 @@ def mvp_predict(
 
 @mvp_cli_app.command(name="export")
 def mvp_export(
+    pairs_path: Annotated[
+        str,
+        typer.Option("--pairs", help="Input pairs parquet"),
+    ] = _DEFAULT_PAIRS,
     artifacts_dir: Annotated[
         str,
         typer.Option("--artifacts", help="Artifacts directory"),
@@ -522,7 +534,13 @@ def mvp_export(
     """Export CSVs and PDF guide for Power BI."""
     os.environ.setdefault("PYTHONUTF8", "1")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    console.print("[yellow]mvp export: not yet implemented (Stage 8)[/yellow]")
+    from tyto.mvp.export import export_powerbi
+
+    try:
+        export_powerbi(pairs_path=pairs_path, artifacts_dir=artifacts_dir, out_dir=out_dir)
+    except FileNotFoundError as exc:
+        console.print(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
 
 
 

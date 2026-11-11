@@ -8,7 +8,6 @@ writes data/processed/pairs_v2018.parquet.
 from __future__ import annotations
 
 import logging
-import re
 import unicodedata
 import zipfile
 from pathlib import Path
@@ -119,7 +118,7 @@ def load_v2018(
 
     rows: list[dict[str, Any]] = []
     for i, (en_raw, ta_raw, ids_line) in enumerate(
-        zip(en_lines, ta_lines, ids_lines)
+        zip(en_lines, ta_lines, ids_lines, strict=True)
     ):
         ids_parts = ids_line.split("\t")
         if len(ids_parts) != 4:
