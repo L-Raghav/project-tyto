@@ -116,3 +116,4 @@ Test files:
 6. **Silhouette 0.2126 at k=8** — modest separation; clusters should be treated as exploratory.
 7. **exports/ is gitignored** — CSVs and PDF regenerate deterministically from `mvp export`.
 8. **Idiom and hedge lists are illustrative** — labeled as such throughout; require native speaker review.
+
