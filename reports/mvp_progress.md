@@ -5,7 +5,7 @@
 | Stage | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 1 | Setup: install deps, declare in pyproject.toml | ✅ DONE | reportlab>=2.7 added to pyproject.toml; src/tyto/mvp/__init__.py created |
-| 2 | Loader: `mvp load` → pairs_v2018.parquet | ⏳ PENDING | |
+| 2 | Loader: `mvp load` → pairs_v2018.parquet | ✅ DONE | 32,417 pairs, 28 docs; vowel_share 0.1793–0.2106 (all pass >=0.10 gate) |
 | 3 | Features: `mvp features` → features.parquet | ⏳ PENDING | |
 | 4 | Heuristic risk: `mvp label` → risk.parquet | ⏳ PENDING | |
 | 5 | Mining: `mvp mine` → rules/clusters/anomalies | ⏳ PENDING | |
