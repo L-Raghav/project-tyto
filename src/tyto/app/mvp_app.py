@@ -276,6 +276,7 @@ def _page_pair_explorer() -> None:
             value=(lr_min, lr_max),
         )
         short_choice = st.selectbox("is_short (<=3 EN words)", ["All", "Yes (1)", "No (0)"])
+        page_size = int(st.selectbox("Pairs per page", [10, 25, 50], index=2))
 
     mask = (df["len_ratio"] >= lr_range[0]) & (df["len_ratio"] <= lr_range[1])
     if film_choice != "All":
@@ -293,9 +294,10 @@ def _page_pair_explorer() -> None:
     if total == 0:
         return
 
-    page_size = 50
     n_pages = max(1, math.ceil(total / page_size))
-    page_num = int(st.number_input("Page (50 pairs/page)", min_value=1, max_value=n_pages, value=1))
+    page_num = int(
+        st.number_input(f"Page ({page_size} pairs/page)", min_value=1, max_value=n_pages, value=1)
+    )
     start = (page_num - 1) * page_size
     end = min(start + page_size, total)
     st.caption(f"Showing rows {start + 1}–{end} of {total:,} (Page {page_num}/{n_pages})")

@@ -53,6 +53,11 @@ dev = [
     "ruff==0.17.0",
     "pre-commit==4.7.0",
 ]
+report = [
+    "playwright>=1.49.0",
+    "pygments>=2.18.0",
+    "matplotlib>=3.9",
+]
 
 [project.scripts]
 tyto = "tyto.cli:app"
