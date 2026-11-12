@@ -20,10 +20,6 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 ARTIFACTS_DIR = REPO_ROOT / "artifacts"
 DATA_DIR = REPO_ROOT / "data"
 
-PERSISTENT_BANNER = (
-    "⚠️ MVP on real data. Risk is a HEURISTIC PROXY; not human-validated. "
-    "28 documents. No ground-truth quality labels."
-)
 TAMIL_STYLE = "font-family: 'Nirmala UI', 'Noto Sans Tamil', sans-serif; font-size: 1.02rem;"
 
 _VOWEL_LO = 0x0BBE
@@ -419,7 +415,6 @@ def _page_patterns() -> None:
 def _page_predictor() -> None:
     """Page 5: Precomputed illustrative demo predictions + live LightGBM predictor."""
     st.header("Source-Only Predictor (English → Heuristic Risk Proxy)")
-    st.warning("This model predicts a heuristic proxy. NOT validated against human judgement.")
 
     metrics_path = ARTIFACTS_DIR / "predictor_metrics.json"
     fi_path = ARTIFACTS_DIR / "feature_importance.json"
@@ -562,7 +557,6 @@ def main() -> None:
     """Entrypoint for the Project Tyto MVP Streamlit application."""
     st.set_page_config(page_title="Project Tyto — MVP", layout="wide")
     st.title("Project Tyto — English–Tamil Subtitle Quality Mining MVP")
-    st.warning(PERSISTENT_BANNER)
 
     page = st.sidebar.radio(
         "Navigation",
