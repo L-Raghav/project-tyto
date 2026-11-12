@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import os
 import platform
 import shutil
 import sys
 import time
+from pathlib import Path
 from typing import Annotated
 
 import psutil
@@ -53,13 +55,301 @@ export_app = typer.Typer(
     help="Power BI and artifact export.",
     invoke_without_command=True,
 )
+mvp_cli_app = typer.Typer(
+    help="MVP pipeline: load, features, label, mine, predict, export.",
+    invoke_without_command=True,
+)
 
 
 @data_app.callback(invoke_without_command=True)
 def data_group(ctx: typer.Context) -> None:
     """Data processing command group."""
     if ctx.invoked_subcommand is None:
-        typer.echo("not implemented yet")
+        console.print("Use 'python -m tyto data --help' for sub-commands.")
+
+
+@data_app.command(name="download")
+def data_download(
+    config: Annotated[
+        str,
+        typer.Option("--config", "-c", help="Path to config YAML."),
+    ] = "configs/default.yaml",
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Re-download even if local files exist."),
+    ] = False,
+    version: Annotated[
+        str | None,
+        typer.Option(
+            "--version",
+            help="OPUS release name ('latest' or exact, e.g. 'v2024').",
+        ),
+    ] = None,
+    max_docs: Annotated[
+        int | None,
+        typer.Option(
+            "--max-docs",
+            help="Limit number of documents extracted from en.zip (smoke test).",
+        ),
+    ] = None,
+) -> None:
+    """Download OPUS OpenSubtitles en-ta corpus (v2024 layout, resume-safe)."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    from tyto.data.download import download_opus
+    from tyto.utils.config import load_config
+
+    cfg = load_config(config)
+    if version:
+        cfg.opus.version = version
+
+    console.print(
+        f"[bold]Downloading OPUS {cfg.opus.corpus} {cfg.opus.version} "
+        f"{cfg.opus.src_lang}-{cfg.opus.tgt_lang}"
+        + (f" (max-docs={max_docs})" if max_docs else "")
+        + " ...[/bold]"
+    )
+    paths = download_opus(cfg, force=force, max_docs=max_docs)
+    for label, path in paths.items():
+        console.print(f"  [green]✓[/green] {label}: {path}")
+
+
+@data_app.command(name="parse")
+def data_parse(
+    config: Annotated[
+        str,
+        typer.Option("--config", "-c", help="Path to config YAML."),
+    ] = "configs/default.yaml",
+    source: Annotated[
+        str | None,
+        typer.Option(
+            "--source",
+            help=(
+                "v2024 cache directory (default: data/raw/opus/<version>) "
+                "or a legacy en-ta.zip path for pre-v2024 releases."
+            ),
+        ),
+    ] = None,
+    output: Annotated[
+        str | None,
+        typer.Option("--output", "-o", help="Override output parquet path."),
+    ] = None,
+    max_docs: Annotated[
+        int | None,
+        typer.Option("--max-docs", help="Stop after N documents (v2024 only)."),
+    ] = None,
+    max_pairs: Annotated[
+        int | None,
+        typer.Option("--max-pairs", help="Stop after N alignment pairs."),
+    ] = None,
+) -> None:
+    """Parse OPUS v2024 cache into data/processed/pairs.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    from tyto.data.parse import parse_and_save
+    from tyto.utils.config import load_config
+
+    cfg = load_config(config)
+    opus = cfg.opus
+
+    if source is None:
+        # Default: v2024 cache root created by 'data download'.
+        from tyto.data.download import resolve_version
+        version = resolve_version(
+            opus.corpus, opus.version, opus.src_lang, opus.tgt_lang
+        ) if opus.version.lower() == "latest" else opus.version
+        source_path = Path(opus.download_dir) / version
+        if not source_path.exists():
+            console.print(
+                f"[red]Cache directory not found: {source_path}. "
+                "Run 'data download' first.[/red]"
+            )
+            raise typer.Exit(1)
+    else:
+        source_path = Path(source)
+        if not source_path.exists():
+            console.print(f"[red]Source not found: {source_path}[/red]")
+            raise typer.Exit(1)
+
+    out = Path(output) if output else None
+    console.print(f"[bold]Parsing {source_path} ...[/bold]")
+    result = parse_and_save(
+        cfg, source_path, output_path=out, max_docs=max_docs, max_pairs=max_pairs
+    )
+    console.print(f"[green]✓[/green] pairs.parquet written to {result}")
+
+
+@data_app.command(name="list")
+def data_list(
+    config: Annotated[
+        str,
+        typer.Option("--config", "-c", help="Path to config YAML."),
+    ] = "configs/default.yaml",
+    all_versions: Annotated[
+        bool,
+        typer.Option("--all", help="Show all versions instead of just 'latest'."),
+    ] = False,
+) -> None:
+    """List available OPUS releases and file URLs for the configured language pair."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    from tyto.data.download import build_opus_urls, list_corpus_files
+    from tyto.utils.config import load_config
+
+    cfg = load_config(config)
+    opus = cfg.opus
+    version_filter = "all" if all_versions else "latest"
+
+    console.print(
+        f"[bold]OPUS {opus.corpus} releases for {opus.src_lang}-{opus.tgt_lang} "
+        f"(filter: {version_filter})[/bold]"
+    )
+    entries = list_corpus_files(
+        opus.corpus, opus.src_lang, opus.tgt_lang, version=version_filter
+    )
+    if not entries:
+        console.print("[yellow]No releases found (network error or no match).[/yellow]")
+        return
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Version")
+    table.add_column("Preprocessing")
+    table.add_column("Size (MB)", justify="right")
+    table.add_column("URL")
+    for entry in entries:
+        size_mb = f"{entry.get('size', 0) / 1e6:.1f}" if entry.get("size") else "?"
+        table.add_row(
+            str(entry.get("version", "?")),
+            str(entry.get("preprocessing", "?")),
+            size_mb,
+            str(entry.get("url", "")),
+        )
+    console.print(table)
+
+    # Always show the three canonical v2024 URLs for the configured version.
+    console.print("\n[bold]Canonical download URLs:[/bold]")
+    urls = build_opus_urls(opus.corpus, opus.version, opus.src_lang, opus.tgt_lang)
+    for label, url in urls.items():
+        console.print(f"  {label:12s}: {url}")
+
+
+@data_app.command(name="qc")
+def data_qc(
+    config: Annotated[
+        str,
+        typer.Option("--config", "-c", help="Path to config YAML."),
+    ] = "configs/default.yaml",
+    parquet: Annotated[
+        str | None,
+        typer.Option("--parquet", help="Override pairs.parquet path."),
+    ] = None,
+    labse: Annotated[
+        bool,
+        typer.Option("--labse", help="Run LaBSE alignment score (stage 2)."),
+    ] = False,
+) -> None:
+    """Apply QC filters and update qc_flags in pairs.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from tyto.data.parse import PAIRS_SCHEMA
+    from tyto.data.qc import run_qc_pipeline
+    from tyto.utils.config import load_config
+
+    cfg = load_config(config)
+    pq_path = Path(parquet) if parquet else (Path(cfg.paths.processed_dir) / "pairs.parquet")
+    if not pq_path.exists():
+        console.print(f"[red]pairs.parquet not found at {pq_path}[/red]")
+        raise typer.Exit(1)
+
+    import pandas as pd
+    df = pd.read_parquet(pq_path)
+    console.print(f"[bold]Running QC pipeline on {len(df):,} rows (labse={labse}) ...[/bold]")
+
+    try:
+        df = run_qc_pipeline(df, cfg, run_labse=labse)
+    except RuntimeError as e:
+        console.print(f"[bold red]{e}[/bold red]")
+        raise typer.Exit(1) from e
+
+    # Write updated parquet (add repeat_count and labse_score columns if needed).
+    extra_cols = [c for c in ["repeat_count", "labse_score"] if c in df.columns]
+    schema_fields = list(PAIRS_SCHEMA)
+    for col in extra_cols:
+        if col == "repeat_count":
+            schema_fields.append(pa.field(col, pa.int32()))
+        elif col == "labse_score":
+            schema_fields.append(pa.field(col, pa.float32()))
+    schema = pa.schema(schema_fields)
+
+    table = pa.Table.from_pandas(df, schema=schema, safe=False)
+    pq.write_table(table, pq_path, compression="snappy")
+    console.print(f"[green]✓[/green] QC complete. pairs.parquet updated at {pq_path}")
+
+
+@data_app.command(name="srt-align")
+def data_srt_align(
+    en_srt: Annotated[str, typer.Argument(help="Path to English .srt file.")],
+    ta_srt: Annotated[str, typer.Argument(help="Path to Tamil .srt file.")],
+    output: Annotated[
+        str | None,
+        typer.Option("--output", "-o", help="Output parquet path."),
+    ] = None,
+    film_id: Annotated[
+        str,
+        typer.Option("--film-id", help="Film identifier."),
+    ] = "unknown",
+    film_title: Annotated[
+        str,
+        typer.Option("--title", help="Human-readable film title."),
+    ] = "",
+    year: Annotated[
+        int | None,
+        typer.Option("--year", help="Release year."),
+    ] = None,
+    min_iou: Annotated[
+        float,
+        typer.Option("--min-iou", help="Minimum temporal IoU threshold."),
+    ] = 0.1,
+) -> None:
+    """Align two .srt files by temporal overlap (IoU) and write pairs.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    from tyto.data.srt_align import align_srt_pair_to_parquet
+
+    out = output or str(Path(en_srt).with_suffix(".aligned.parquet"))
+    console.print(f"[bold]Aligning {en_srt} + {ta_srt} ...[/bold]")
+    result = align_srt_pair_to_parquet(
+        en_srt, ta_srt, out,
+        film_id=film_id, film_title=film_title, year=year, min_iou=min_iou,
+    )
+    console.print(f"[green]✓[/green] Aligned parquet written to {result}")
+
+
+@data_app.command(name="audit")
+def data_audit(
+    config: Annotated[
+        str,
+        typer.Option("--config", "-c", help="Path to config YAML."),
+    ] = "configs/default.yaml",
+    parquet: Annotated[
+        str | None,
+        typer.Option("--parquet", help="Override pairs.parquet path."),
+    ] = None,
+    report: Annotated[
+        str | None,
+        typer.Option("--report", help="Override report output path."),
+    ] = None,
+) -> None:
+    """Generate data_audit.md and figures from pairs.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    from tyto.data.audit import generate_audit
+    from tyto.utils.config import load_config
+
+    cfg = load_config(config)
+    pq_path = Path(parquet) if parquet else None
+    rp_path = Path(report) if report else None
+
+    console.print("[bold]Generating data audit ...[/bold]")
+    result = generate_audit(cfg, parquet_path=pq_path, report_path=rp_path, seed=cfg.seed)
+    console.print(f"[green]✓[/green] Audit report written to {result}")
 
 
 @features_app.callback(invoke_without_command=True)
@@ -103,6 +393,157 @@ app.add_typer(mine_app, name="mine")
 app.add_typer(train_app, name="train")
 app.add_typer(review_app, name="app")
 app.add_typer(export_app, name="export")
+app.add_typer(mvp_cli_app, name="mvp")
+
+
+# ---------------------------------------------------------------------------
+# MVP sub-app commands
+# ---------------------------------------------------------------------------
+
+_DEFAULT_ZIP = "data/raw/opus/v2018/en-ta.txt.zip"
+_DEFAULT_PAIRS = "data/processed/pairs_v2018.parquet"
+_DEFAULT_FEATURES = "artifacts/features.parquet"
+_DEFAULT_RISK = "artifacts/risk.parquet"
+_DEFAULT_ARTIFACTS = "artifacts"
+
+
+@mvp_cli_app.callback(invoke_without_command=True)
+def mvp_group(ctx: typer.Context) -> None:
+    """MVP pipeline command group."""
+    if ctx.invoked_subcommand is None:
+        console.print("Use 'python -m tyto mvp --help' for sub-commands.")
+
+
+@mvp_cli_app.command(name="load")
+def mvp_load(
+    zip_path: Annotated[
+        str,
+        typer.Option("--input", "--zip", help="Path to en-ta.txt.zip"),
+    ] = _DEFAULT_ZIP,
+    out_path: Annotated[
+        str,
+        typer.Option("--out", "--output", help="Output parquet path"),
+    ] = _DEFAULT_PAIRS,
+) -> None:
+    """Load v2018 corpus → data/processed/pairs_v2018.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    if not Path(zip_path).exists():
+        console.print(f"[red]Error: input zip not found: {zip_path}[/red]")
+        raise typer.Exit(code=1)
+    from tyto.mvp.load import load_v2018
+
+    load_v2018(zip_path, out_path)
+
+
+@mvp_cli_app.command(name="features")
+def mvp_features(
+    pairs_path: Annotated[
+        str,
+        typer.Option("--pairs", "--input", help="Input pairs parquet"),
+    ] = _DEFAULT_PAIRS,
+    out_path: Annotated[
+        str,
+        typer.Option("--out", "--output", help="Output features parquet"),
+    ] = _DEFAULT_FEATURES,
+    artifacts_dir: Annotated[
+        str,
+        typer.Option("--artifacts", help="Artifacts directory for embedding caches"),
+    ] = _DEFAULT_ARTIFACTS,
+) -> None:
+    """Extract features → artifacts/features.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    if not Path(pairs_path).exists():
+        console.print(f"[red]Error: pairs parquet not found: {pairs_path}[/red]")
+        raise typer.Exit(code=1)
+    from tyto.mvp.features import extract_features
+
+    extract_features(pairs_path, out_path, artifacts_dir)
+
+
+@mvp_cli_app.command(name="label")
+def mvp_label(
+    features_path: Annotated[
+        str,
+        typer.Option("--features", help="Input features parquet"),
+    ] = _DEFAULT_FEATURES,
+    out_path: Annotated[
+        str,
+        typer.Option("--out", help="Output risk parquet"),
+    ] = _DEFAULT_RISK,
+) -> None:
+    """Heuristic risk scoring → artifacts/risk.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    from tyto.mvp.label import score_risk
+    score_risk(features_path, out_path)
+
+
+@mvp_cli_app.command(name="mine")
+def mvp_mine(
+    risk_path: Annotated[
+        str,
+        typer.Option("--risk", help="Input risk parquet"),
+    ] = _DEFAULT_RISK,
+    artifacts_dir: Annotated[
+        str,
+        typer.Option("--artifacts", help="Artifacts directory"),
+    ] = _DEFAULT_ARTIFACTS,
+) -> None:
+    """Pattern mining → association rules, clusters, anomalies, film stats."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    from tyto.mvp.mine import run_mining
+    run_mining(risk_path, artifacts_dir)
+
+
+@mvp_cli_app.command(name="predict")
+def mvp_predict(
+    risk_path: Annotated[
+        str,
+        typer.Option("--risk", help="Input risk parquet"),
+    ] = _DEFAULT_RISK,
+    artifacts_dir: Annotated[
+        str,
+        typer.Option("--artifacts", help="Artifacts directory"),
+    ] = _DEFAULT_ARTIFACTS,
+) -> None:
+    """Train predictor → LightGBM model + metrics."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    from tyto.mvp.predict import train_predictor
+    train_predictor(risk_path, artifacts_dir)
+
+
+@mvp_cli_app.command(name="export")
+def mvp_export(
+    pairs_path: Annotated[
+        str,
+        typer.Option("--pairs", help="Input pairs parquet"),
+    ] = _DEFAULT_PAIRS,
+    artifacts_dir: Annotated[
+        str,
+        typer.Option("--artifacts", help="Artifacts directory"),
+    ] = _DEFAULT_ARTIFACTS,
+    out_dir: Annotated[
+        str,
+        typer.Option("--out", help="Export output directory"),
+    ] = "exports",
+) -> None:
+    """Export CSVs and PDF guide for Power BI."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    from tyto.mvp.export import export_powerbi
+
+    try:
+        export_powerbi(pairs_path=pairs_path, artifacts_dir=artifacts_dir, out_dir=out_dir)
+    except FileNotFoundError as exc:
+        console.print(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+
+
 
 
 @app.command(name="doctor")

@@ -10,3 +10,4 @@
 - .gitignore already exists (GitHub's Python template plus project folders). Extend it; never replace it. Keep data/resources/ and data/gold/annotations.parquet tracked.
 - Ask me before any command that installs something outside this repo.
 - Never run bare `python`, `pip` or `pytest`. Always call `.venv\Scripts\python.exe -m ...` (for example `.venv\Scripts\python.exe -m pytest -q`). The global Python is 3.13 and is wrong for this project.
+- In repo files, docs, reports and commit messages, call each task "Phase N" (for example reports/phase1_report.md), never "P1" or "TASK P1".
