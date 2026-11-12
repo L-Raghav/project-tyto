@@ -32,8 +32,14 @@ def test_cli_help() -> None:
 
 
 def test_cli_unimplemented_groups() -> None:
-    """Ensure placeholder command groups print 'not implemented yet'."""
-    for group_name in ["data", "features", "mine", "train", "app", "export"]:
+    """Ensure placeholder command groups print a usage hint."""
+    # 'data' now has real sub-commands and prints a help hint.
+    result = runner.invoke(app, ["data"])
+    assert result.exit_code == 0
+    assert "data" in result.output.lower()
+
+    # Other groups still show 'not implemented yet'.
+    for group_name in ["features", "mine", "train", "app", "export"]:
         result = runner.invoke(app, [group_name])
         assert result.exit_code == 0
         assert "not implemented yet" in result.output
