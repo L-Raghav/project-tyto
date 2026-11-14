@@ -21,10 +21,10 @@
   - Source-only file contains no pair-side leakage columns
   - CliRunner test for `mvp dataset`
 - [x] **4. Quality Verification**: Run `ruff check .` and `pytest -q`; resolve any warnings or failures.
-- [ ] **5. Execution on Real Artifacts**: Run `.venv\Scripts\python.exe -m tyto mvp dataset --out ../tyto-dataset`.
-- [ ] **6. Verification Gates & Repo Hygiene**:
+- [x] **5. Execution on Real Artifacts**: Run `.venv\Scripts\python.exe -m tyto mvp dataset --out ../tyto-dataset`.
+- [x] **6. Verification Gates & Repo Hygiene**:
   - Check verification gates (rows=32,417, PairID unique, RiskTier counts, RiskFlag count)
   - Inspect output folder tree, file sizes, and first 5 rows
   - Ensure zero subtitle text or generated datasets in repo git status
-- [ ] **7. Comprehensive Report**: Write `reports/dataset_report.md` containing raw ruff/pytest outputs, gate results, omitted columns, and file sizes.
-- [ ] **8. Version Control**: Commit after each part and push only branch `mvp-dataset`.
+- [x] **7. Comprehensive Report**: Write `reports/dataset_report.md` containing raw ruff/pytest outputs, gate results, omitted columns, and file sizes.
+- [x] **8. Version Control**: Commit after each part and push only branch `mvp-dataset`.
