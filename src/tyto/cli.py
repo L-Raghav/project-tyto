@@ -543,6 +543,50 @@ def mvp_export(
         raise typer.Exit(code=1) from exc
 
 
+@mvp_cli_app.command(name="dataset")
+def mvp_dataset(
+    pairs_path: Annotated[
+        str,
+        typer.Option("--pairs", help="Input pairs parquet"),
+    ] = _DEFAULT_PAIRS,
+    artifacts_dir: Annotated[
+        str,
+        typer.Option("--artifacts", help="Artifacts directory"),
+    ] = _DEFAULT_ARTIFACTS,
+    out_dir: Annotated[
+        str,
+        typer.Option("--out", help="Output directory outside the repo"),
+    ] = "../tyto-dataset",
+) -> None:
+    """Build spreadsheet-style course-ready tabular dataset and previews."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    from tyto.mvp.dataset import generate_dataset_artifacts
+
+    art_dir = Path(artifacts_dir)
+    try:
+        summary = generate_dataset_artifacts(
+            pairs_path=pairs_path,
+            risk_path=art_dir / "risk.parquet",
+            clusters_path=art_dir / "clusters.parquet",
+            anomalies_path=art_dir / "anomalies.parquet",
+            film_stats_path=art_dir / "film_stats.parquet",
+            out_dir=out_dir,
+        )
+        console.print(
+            f"[green]Dataset generated successfully at {summary['out_dir']}[/green]\n"
+            f"  Total rows: {summary['total_rows']:,}\n"
+            f"  Columns: {summary['columns_count']}\n"
+            f"  Sample rows: {summary['sample_rows']:,}\n"
+            f"  Source-only columns: {summary['source_only_cols']}\n"
+            f"  Previews: {summary['previews']['preview_1']}, {summary['previews']['preview_2']}"
+        )
+    except Exception as exc:
+        console.print(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+
+
 
 
 
