@@ -55,6 +55,10 @@ export_app = typer.Typer(
     help="Power BI and artifact export.",
     invoke_without_command=True,
 )
+mvp_cli_app = typer.Typer(
+    help="MVP pipeline: load, features, label, mine, predict, export.",
+    invoke_without_command=True,
+)
 
 
 @data_app.callback(invoke_without_command=True)
@@ -389,6 +393,201 @@ app.add_typer(mine_app, name="mine")
 app.add_typer(train_app, name="train")
 app.add_typer(review_app, name="app")
 app.add_typer(export_app, name="export")
+app.add_typer(mvp_cli_app, name="mvp")
+
+
+# ---------------------------------------------------------------------------
+# MVP sub-app commands
+# ---------------------------------------------------------------------------
+
+_DEFAULT_ZIP = "data/raw/opus/v2018/en-ta.txt.zip"
+_DEFAULT_PAIRS = "data/processed/pairs_v2018.parquet"
+_DEFAULT_FEATURES = "artifacts/features.parquet"
+_DEFAULT_RISK = "artifacts/risk.parquet"
+_DEFAULT_ARTIFACTS = "artifacts"
+
+
+@mvp_cli_app.callback(invoke_without_command=True)
+def mvp_group(ctx: typer.Context) -> None:
+    """MVP pipeline command group."""
+    if ctx.invoked_subcommand is None:
+        console.print("Use 'python -m tyto mvp --help' for sub-commands.")
+
+
+@mvp_cli_app.command(name="load")
+def mvp_load(
+    zip_path: Annotated[
+        str,
+        typer.Option("--input", "--zip", help="Path to en-ta.txt.zip"),
+    ] = _DEFAULT_ZIP,
+    out_path: Annotated[
+        str,
+        typer.Option("--out", "--output", help="Output parquet path"),
+    ] = _DEFAULT_PAIRS,
+) -> None:
+    """Load v2018 corpus → data/processed/pairs_v2018.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    if not Path(zip_path).exists():
+        console.print(f"[red]Error: input zip not found: {zip_path}[/red]")
+        raise typer.Exit(code=1)
+    from tyto.mvp.load import load_v2018
+
+    load_v2018(zip_path, out_path)
+
+
+@mvp_cli_app.command(name="features")
+def mvp_features(
+    pairs_path: Annotated[
+        str,
+        typer.Option("--pairs", "--input", help="Input pairs parquet"),
+    ] = _DEFAULT_PAIRS,
+    out_path: Annotated[
+        str,
+        typer.Option("--out", "--output", help="Output features parquet"),
+    ] = _DEFAULT_FEATURES,
+    artifacts_dir: Annotated[
+        str,
+        typer.Option("--artifacts", help="Artifacts directory for embedding caches"),
+    ] = _DEFAULT_ARTIFACTS,
+) -> None:
+    """Extract features → artifacts/features.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    if not Path(pairs_path).exists():
+        console.print(f"[red]Error: pairs parquet not found: {pairs_path}[/red]")
+        raise typer.Exit(code=1)
+    from tyto.mvp.features import extract_features
+
+    extract_features(pairs_path, out_path, artifacts_dir)
+
+
+@mvp_cli_app.command(name="label")
+def mvp_label(
+    features_path: Annotated[
+        str,
+        typer.Option("--features", help="Input features parquet"),
+    ] = _DEFAULT_FEATURES,
+    out_path: Annotated[
+        str,
+        typer.Option("--out", help="Output risk parquet"),
+    ] = _DEFAULT_RISK,
+) -> None:
+    """Heuristic risk scoring → artifacts/risk.parquet."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    from tyto.mvp.label import score_risk
+    score_risk(features_path, out_path)
+
+
+@mvp_cli_app.command(name="mine")
+def mvp_mine(
+    risk_path: Annotated[
+        str,
+        typer.Option("--risk", help="Input risk parquet"),
+    ] = _DEFAULT_RISK,
+    artifacts_dir: Annotated[
+        str,
+        typer.Option("--artifacts", help="Artifacts directory"),
+    ] = _DEFAULT_ARTIFACTS,
+) -> None:
+    """Pattern mining → association rules, clusters, anomalies, film stats."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    from tyto.mvp.mine import run_mining
+    run_mining(risk_path, artifacts_dir)
+
+
+@mvp_cli_app.command(name="predict")
+def mvp_predict(
+    risk_path: Annotated[
+        str,
+        typer.Option("--risk", help="Input risk parquet"),
+    ] = _DEFAULT_RISK,
+    artifacts_dir: Annotated[
+        str,
+        typer.Option("--artifacts", help="Artifacts directory"),
+    ] = _DEFAULT_ARTIFACTS,
+) -> None:
+    """Train predictor → LightGBM model + metrics."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    from tyto.mvp.predict import train_predictor
+    train_predictor(risk_path, artifacts_dir)
+
+
+@mvp_cli_app.command(name="export")
+def mvp_export(
+    pairs_path: Annotated[
+        str,
+        typer.Option("--pairs", help="Input pairs parquet"),
+    ] = _DEFAULT_PAIRS,
+    artifacts_dir: Annotated[
+        str,
+        typer.Option("--artifacts", help="Artifacts directory"),
+    ] = _DEFAULT_ARTIFACTS,
+    out_dir: Annotated[
+        str,
+        typer.Option("--out", help="Export output directory"),
+    ] = "exports",
+) -> None:
+    """Export CSVs and PDF guide for Power BI."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    from tyto.mvp.export import export_powerbi
+
+    try:
+        export_powerbi(pairs_path=pairs_path, artifacts_dir=artifacts_dir, out_dir=out_dir)
+    except FileNotFoundError as exc:
+        console.print(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+
+@mvp_cli_app.command(name="dataset")
+def mvp_dataset(
+    pairs_path: Annotated[
+        str,
+        typer.Option("--pairs", help="Input pairs parquet"),
+    ] = _DEFAULT_PAIRS,
+    artifacts_dir: Annotated[
+        str,
+        typer.Option("--artifacts", help="Artifacts directory"),
+    ] = _DEFAULT_ARTIFACTS,
+    out_dir: Annotated[
+        str,
+        typer.Option("--out", help="Output directory outside the repo"),
+    ] = "../tyto-dataset",
+) -> None:
+    """Build spreadsheet-style course-ready tabular dataset and previews."""
+    os.environ.setdefault("PYTHONUTF8", "1")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    from tyto.mvp.dataset import generate_dataset_artifacts
+
+    art_dir = Path(artifacts_dir)
+    try:
+        summary = generate_dataset_artifacts(
+            pairs_path=pairs_path,
+            risk_path=art_dir / "risk.parquet",
+            clusters_path=art_dir / "clusters.parquet",
+            anomalies_path=art_dir / "anomalies.parquet",
+            film_stats_path=art_dir / "film_stats.parquet",
+            out_dir=out_dir,
+        )
+        console.print(
+            f"[green]Dataset generated successfully at {summary['out_dir']}[/green]\n"
+            f"  Total rows: {summary['total_rows']:,}\n"
+            f"  Columns: {summary['columns_count']}\n"
+            f"  Sample rows: {summary['sample_rows']:,}\n"
+            f"  Source-only columns: {summary['source_only_cols']}\n"
+            f"  Previews: {summary['previews']['preview_1']}, {summary['previews']['preview_2']}"
+        )
+    except Exception as exc:
+        console.print(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+
+
+
 
 
 @app.command(name="doctor")

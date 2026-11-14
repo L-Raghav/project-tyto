@@ -1,0 +1,30 @@
+# Course-Ready Tabular Dataset Progress Checklist
+
+- [x] **0. Setup**: Switch to branch `mvp-dataset` from `mvp-report-assets`; install `openpyxl`; verify required MVP artifacts and schemas.
+- [x] **1. Dataset Builder Module**: Implement `src/tyto/mvp/dataset.py` with:
+  - Artifact loading and schema mapping
+  - Exact column derivation and type casting (33 columns, PascalCase)
+  - Verification gates (rows=32,417, unique PairID, RiskTier counts, RiskFlag count)
+  - Main table exports: `tyto_dataset.csv` (UTF-8 BOM) and `tyto_dataset.xlsx` (Data + Dictionary sheets, openpyxl, frozen pane, autofilter, number formats)
+  - Derived files: `tyto_dataset_sample_1470.csv`, `tyto_dataset_source_only.csv`
+  - Documentation: `DATA_DICTIONARY.md`, `DATASET_CARD.md`
+  - Reference text: `private/PRIVATE_pair_text.csv` and `private/README.md`
+  - Screenshots: `previews/preview_1.png`, `previews/preview_2.png`, `previews/preview_all_columns_note.txt` via Playwright Chromium
+- [x] **2. CLI Integration**: Register `dataset` subcommand under `tyto mvp dataset` in `src/tyto/cli.py` (`--out`, default `../tyto-dataset`).
+- [x] **3. Unit Tests**: Implement `tests/test_mvp_dataset.py` covering:
+  - Fast synthetic fixture (no GPU, no real data)
+  - Column set and order
+  - Unique PairID
+  - Strict Yes/No in indicator columns
+  - Quartile levels exactly 1..4
+  - Constant columns present and documented
+  - Source-only file contains no pair-side leakage columns
+  - CliRunner test for `mvp dataset`
+- [x] **4. Quality Verification**: Run `ruff check .` and `pytest -q`; resolve any warnings or failures.
+- [x] **5. Execution on Real Artifacts**: Run `.venv\Scripts\python.exe -m tyto mvp dataset --out ../tyto-dataset`.
+- [x] **6. Verification Gates & Repo Hygiene**:
+  - Check verification gates (rows=32,417, PairID unique, RiskTier counts, RiskFlag count)
+  - Inspect output folder tree, file sizes, and first 5 rows
+  - Ensure zero subtitle text or generated datasets in repo git status
+- [x] **7. Comprehensive Report**: Write `reports/dataset_report.md` containing raw ruff/pytest outputs, gate results, omitted columns, and file sizes.
+- [x] **8. Version Control**: Commit after each part and push only branch `mvp-dataset`.
